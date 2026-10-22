@@ -29,3 +29,29 @@ springdoc:
 
 oficina:
   environment: ${OFICINA_ENVIRONMENT:local}
+  security:
+    jwt:
+      secret: ${JWT_SECRET:change-me-in-production-at-least-32-chars-long-please}
+      issuer: oficina-backend
+      cliente-public-key: ${SERVERLESS_JWT_PUBLIC_KEY:}
+      cliente-issuer: ${SERVERLESS_JWT_ISSUER:oficina-auth-serverless}
+      cliente-audience: ${SERVERLESS_JWT_AUDIENCE:oficina-backend}
+  mensageria:
+    # memoria (local/testes) ou sqs
+    tipo: ${MENSAGERIA_TIPO:memoria}
+    sqs:
+      region: ${AWS_REGION:us-west-2}
+      endpoint: ${AWS_SQS_ENDPOINT:}
+      os-eventos-url: ${SQS_OS_EVENTOS_URL:}
+      comandos-url: ${SQS_DIAGNOSTICO_REPARO_COMANDOS_URL:}
+      wait-time-seconds: ${SQS_WAIT_TIME_SECONDS:20}
+      max-messages: ${SQS_MAX_MESSAGES:10}
+      poll-delay-ms: ${SQS_POLL_DELAY_MS:1000}
+  persistencia:
+    # memoria (local/testes) ou dynamodb
+    tipo: ${PERSISTENCIA_TIPO:memoria}
+    dynamodb:
+      region: ${AWS_REGION:us-west-2}
+      endpoint: ${AWS_DYNAMODB_ENDPOINT:}
+      table-name: ${DYNAMODB_TABLE_NAME:oficina-local-execucoes}
+      fila-index: ${DYNAMODB_FILA_INDEX:etapa-entradaFilaEm-index}
