@@ -68,3 +68,7 @@ Clean Architecture com 4 camadas, validada por ArchUnit (`ArchitectureTest`):
 ## CI
 
 `.github/workflows/ci.yml`: validação dos workflows, build com testes e JaCoCo, SonarCloud (quality gate, quando o secret `SONAR_TOKEN` existir), SBOM CycloneDX e Trivy + Gitleaks.
+
+## Deploy (EKS)
+
+`cd.yml` publica a imagem no GHCR e chama `deploy.yml`, que aplica `k8s/` no namespace `oficina-diagnostico-reparo-<env>` do cluster compartilhado, com Service LoadBalancer próprio. O deploy só roda com `DEPLOY_ENABLED=true`, que o `configure-environment.ps1` liga depois do apply do EKS e do banco.
