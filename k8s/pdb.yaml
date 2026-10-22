@@ -1,0 +1,13 @@
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: oficina-diagnostico-reparo
+  namespace: oficina-diagnostico-reparo
+  labels:
+    app.kubernetes.io/name: oficina-diagnostico-reparo
+    app.kubernetes.io/part-of: oficina-diagnostico-reparo-service
+spec:
+  maxUnavailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: oficina-diagnostico-reparo

@@ -1,0 +1,188 @@
+# Deploy do Serviço de Diagnóstico e Reparo no EKS (mesmo cluster, namespace próprio por ambiente)
+name: Deploy (reusable)
+
+on:
+  workflow_call:
+    inputs:
+      environment:
+        description: GitHub Environment alvo
+        required: true
+        type: string
+      namespace:
+        description: Namespace Kubernetes do serviço no ambiente
+        required: true
+        type: string
+      image_ref:
+        description: Imagem completa a ser implantada
+        required: true
+        type: string
+
+jobs:
+  deploy:
+    name: Deploy ${{ inputs.environment }} (${{ inputs.namespace }})
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+    permissions:
+      contents: read
+    env:
+      AWS_REGION: ${{ vars.AWS_REGION || 'us-west-2' }}
+      EKS_CLUSTER_NAME: ${{ vars.EKS_CLUSTER_NAME }}
+      DYNAMODB_TABLE_NAME: ${{ vars.DYNAMODB_TABLE_NAME }}
+      SQS_OS_EVENTOS_URL: ${{ vars.SQS_OS_EVENTOS_URL }}
+      SQS_DIAGNOSTICO_REPARO_COMANDOS_URL: ${{ vars.SQS_DIAGNOSTICO_REPARO_COMANDOS_URL }}
+      NEW_RELIC_ENABLED: ${{ vars.NEW_RELIC_ENABLED || 'false' }}
+      DEPLOY_ENABLED: ${{ vars.DEPLOY_ENABLED || 'false' }}
+    steps:
+      - name: Deployment gate
+        run: |
+          if [ "$DEPLOY_ENABLED" != "true" ]; then
+            echo '::error::Deploy bloqueado: DEPLOY_ENABLED deve valer true depois do configure-environment.ps1 (EKS e banco aplicados).'
+            exit 1
+          fi
+
+      - uses: actions/checkout@v4
+        if: env.DEPLOY_ENABLED == 'true'
+
+      - name: Validate required environment configuration
+        if: env.DEPLOY_ENABLED == 'true'
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_SESSION_TOKEN: ${{ secrets.AWS_SESSION_TOKEN }}
+          NEW_RELIC_LICENSE_KEY: ${{ secrets.NEW_RELIC_LICENSE_KEY }}
+          APP_JWT_SECRET: ${{ secrets.APP_JWT_SECRET }}
+        run: |
+          set -euo pipefail
+          missing=()
+          for name in AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY AWS_SESSION_TOKEN APP_JWT_SECRET EKS_CLUSTER_NAME DYNAMODB_TABLE_NAME SQS_OS_EVENTOS_URL SQS_DIAGNOSTICO_REPARO_COMANDOS_URL; do
+            if [ -z "${!name:-}" ]; then missing+=("$name"); fi
+          done
+          if [ "${NEW_RELIC_ENABLED,,}" = "true" ] && [ -z "$NEW_RELIC_LICENSE_KEY" ]; then
+            missing+=("NEW_RELIC_LICENSE_KEY")
+          fi
+          if [ "${#missing[@]}" -gt 0 ]; then
+            printf '::error::Configure no GitHub Environment %s: %s\n' '${{ inputs.environment }}' "${missing[*]}"
+            exit 1
+          fi
+
+      - name: Configure AWS Academy credentials
+        if: env.DEPLOY_ENABLED == 'true'
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Setup kubectl
+        if: env.DEPLOY_ENABLED == 'true'
+        uses: azure/setup-kubectl@v4
+        with:
+          version: 'v1.34.0'
+
+      - name: Configure cluster access
+        if: env.DEPLOY_ENABLED == 'true'
+        id: cluster
+        run: |
+          set -euo pipefail
+          aws eks update-kubeconfig --region "$AWS_REGION" --name "$EKS_CLUSTER_NAME"
+          kubectl cluster-info
+
+      - name: Render application manifests
+        if: env.DEPLOY_ENABLED == 'true'
+        env:
+          TARGET_NS: ${{ inputs.namespace }}
+          IMAGE_REF: ${{ inputs.image_ref }}
+        run: |
+          set -euo pipefail
+          rm -rf rendered
+          mkdir -p rendered
+          cp k8s/*.yaml rendered/
+          sed -i "s|name: oficina-diagnostico-reparo$|name: ${TARGET_NS}|" rendered/namespace.yaml
+          sed -i "s|namespace: oficina-diagnostico-reparo$|namespace: ${TARGET_NS}|" rendered/*.yaml
+          sed -i "s|image: oficina-diagnostico-reparo-service:latest|image: ${IMAGE_REF}|" rendered/app-deployment.yaml
+          sed -i "s|imagePullPolicy: IfNotPresent|imagePullPolicy: Always|" rendered/app-deployment.yaml
+          kubectl apply -f rendered/namespace.yaml
+
+      - name: Apply configuration
+        if: env.DEPLOY_ENABLED == 'true'
+        env:
+          TARGET_NS: ${{ inputs.namespace }}
+          NEW_RELIC_LICENSE_KEY: ${{ secrets.NEW_RELIC_LICENSE_KEY }}
+          APP_JWT_SECRET: ${{ secrets.APP_JWT_SECRET }}
+        run: |
+          set -euo pipefail
+          nr_enabled=false
+          if [ "${NEW_RELIC_ENABLED,,}" = "true" ]; then nr_enabled=true; fi
+          kubectl create configmap diagnostico-reparo-config \
+            --namespace "$TARGET_NS" \
+            --from-literal=SERVER_PORT=8080 \
+            --from-literal=SPRING_PROFILES_ACTIVE=prod \
+            --from-literal=OFICINA_ENVIRONMENT='${{ inputs.environment }}' \
+            --from-literal=MENSAGERIA_TIPO=sqs \
+            --from-literal=AWS_REGION="$AWS_REGION" \
+            --from-literal=SQS_OS_EVENTOS_URL="$SQS_OS_EVENTOS_URL" \
+            --from-literal=PERSISTENCIA_TIPO=dynamodb \
+            --from-literal=DYNAMODB_TABLE_NAME="$DYNAMODB_TABLE_NAME" \
+            --from-literal=SQS_DIAGNOSTICO_REPARO_COMANDOS_URL="$SQS_DIAGNOSTICO_REPARO_COMANDOS_URL" \
+            --from-literal=JAVA_TOOL_OPTIONS=-javaagent:/opt/newrelic/newrelic.jar \
+            --from-literal=NEW_RELIC_AGENT_ENABLED="$nr_enabled" \
+            --from-literal=NEW_RELIC_APP_NAME="oficina-diagnostico-reparo-service-${{ inputs.environment }}" \
+            --from-literal=NEW_RELIC_DISTRIBUTED_TRACING_ENABLED=true \
+            --from-literal=NEW_RELIC_LOG_FILE_NAME=STDOUT \
+            --from-literal=NEW_RELIC_LABELS="environment:${{ inputs.environment }};service:oficina-diagnostico-reparo-service" \
+            --dry-run=client -o yaml | kubectl apply -f -
+          kubectl create secret generic diagnostico-reparo-secrets \
+            --namespace "$TARGET_NS" \
+            --from-literal=JWT_SECRET="$APP_JWT_SECRET" \
+            --from-literal=NEW_RELIC_LICENSE_KEY="$NEW_RELIC_LICENSE_KEY" \
+            --dry-run=client -o yaml | kubectl apply -f -
+
+      - name: Apply application manifests
+        if: env.DEPLOY_ENABLED == 'true'
+        run: |
+          set -euo pipefail
+          kubectl apply -f rendered/app-deployment.yaml
+          kubectl apply -f rendered/app-service.yaml
+          kubectl apply -f rendered/hpa.yaml
+          kubectl apply -f rendered/pdb.yaml
+          kubectl rollout restart deployment/oficina-diagnostico-reparo -n "${{ inputs.namespace }}"
+
+      - name: Wait for application rollout
+        if: env.DEPLOY_ENABLED == 'true'
+        run: kubectl rollout status deployment/oficina-diagnostico-reparo -n "${{ inputs.namespace }}" --timeout=1200s
+
+      - name: Smoke test
+        if: env.DEPLOY_ENABLED == 'true'
+        run: |
+          set -euo pipefail
+          kubectl -n "${{ inputs.namespace }}" run smoke-${{ github.run_id }} \
+            --image=curlimages/curl:8.10.1 --restart=Never --rm -i --quiet \
+            --command -- curl -fsS http://oficina-diagnostico-reparo/actuator/health/readiness
+
+      - name: Capture public service URL
+        if: env.DEPLOY_ENABLED == 'true'
+        id: service-url
+        env:
+          TARGET_NS: ${{ inputs.namespace }}
+        run: |
+          set -euo pipefail
+          host=''
+          for attempt in $(seq 1 30); do
+            host="$(kubectl get service oficina-diagnostico-reparo -n "$TARGET_NS" -o jsonpath='{.status.loadBalancer.ingress[0].hostname}')"
+            if [ -n "$host" ]; then break; fi
+            echo "Aguardando LoadBalancer público (${attempt}/30)..."
+            sleep 10
+          done
+          if [ -z "$host" ]; then
+            echo '::error::O Service oficina-diagnostico-reparo não recebeu hostname público.'
+            exit 1
+          fi
+          echo "value=http://${host}" >> "$GITHUB_OUTPUT"
+          echo "- URL pública: http://${host}" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Collect diagnostics on failure
+        if: env.DEPLOY_ENABLED == 'true' && failure() && steps.cluster.outcome == 'success'
+        run: |
+          kubectl get deployment,pods,svc,hpa -n "${{ inputs.namespace }}" || true
+          kubectl describe deployment/oficina-diagnostico-reparo -n "${{ inputs.namespace }}" || true
