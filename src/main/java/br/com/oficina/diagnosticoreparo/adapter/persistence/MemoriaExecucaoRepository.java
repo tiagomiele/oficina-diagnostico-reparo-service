@@ -9,10 +9,12 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.context.annotation.Primary;
 import org.springframework.stereotype.Component;
 
 /** Persistência local para desenvolvimento e testes, sem DynamoDB. */
 @Component
+@Primary
 @ConditionalOnProperty(
     name = "oficina.persistencia.tipo",
     havingValue = "memoria",
