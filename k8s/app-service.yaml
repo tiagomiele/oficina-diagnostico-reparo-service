@@ -1,0 +1,18 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: oficina-diagnostico-reparo
+  namespace: oficina-diagnostico-reparo
+  labels:
+    app.kubernetes.io/name: oficina-diagnostico-reparo
+    app.kubernetes.io/part-of: oficina-diagnostico-reparo-service
+    app.kubernetes.io/component: service
+spec:
+  type: LoadBalancer
+  selector:
+    app.kubernetes.io/name: oficina-diagnostico-reparo
+  ports:
+    - port: 80
+      targetPort: 8080
+      protocol: TCP
+      name: http
