@@ -200,7 +200,7 @@ Depois, faz um smoke test do `/actuator/health/readiness` e publica a URL no res
 
 ## 11. Observabilidade
 
-New Relic APM `oficina-diagnostico-reparo-service-<env>`: agente Java, distributed tracing e logs em JSON com `correlationId` e `numeroOs`. Dashboard, alertas e profundidade das DLQs: [`oficina-kubernetes-infra`](https://github.com/tiagomiele/oficina-kubernetes-infra#readme).
+New Relic APM `oficina-diagnostico-reparo-service-<env>`: agente Java, distributed tracing e logs em JSON (perfil `prod`) com o `correlationId` da Saga. Dashboard, alertas e profundidade das DLQs: [`oficina-kubernetes-infra`](https://github.com/tiagomiele/oficina-kubernetes-infra#readme).
 
 ```powershell
 kubectl logs -n oficina-diagnostico-reparo-production deploy/oficina-diagnostico-reparo --tail 200 | Select-String 'Comando|DIAGNOSTICO_|REPARO_'
