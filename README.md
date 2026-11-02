@@ -198,6 +198,17 @@ O deploy aplica `k8s/` no namespace `oficina-diagnostico-reparo-<env>` e só rod
 
 Depois, faz um smoke test do `/actuator/health/readiness` e publica a URL no resumo do job.
 
+
+### Evidência de cobertura de testes
+
+O build falha se a cobertura ficar abaixo de 80% (JaCoCo, `jacoco.minimum.coverage = 0.80` no `pom.xml`). Último CI verde em `homolog` (02/11/2026, 39 testes):
+
+| Linhas | Instruções | Branches | Relatório |
+|---|---|---|---|
+| 99,4% | 99,2% | 92,5% | artefato `jacoco-report` do [run 41476675173](https://github.com/tiagomiele/oficina-diagnostico-reparo-service/actions/runs/41476675173) |
+
+Quality Gate do SonarCloud: [painel do projeto](https://sonarcloud.io/summary/overall?id=tiagomiele_oficina-diagnostico-reparo-service&branch=homolog). Para gerar o relatório local: `./mvnw verify` e abra `target/site/jacoco/index.html`.
+
 ## 11. Observabilidade
 
 New Relic APM `oficina-diagnostico-reparo-service-<env>`: agente Java, distributed tracing e logs em JSON (perfil `prod`) com o `correlationId` da Saga. Dashboard, alertas e profundidade das DLQs: [`oficina-kubernetes-infra`](https://github.com/tiagomiele/oficina-kubernetes-infra#readme).
