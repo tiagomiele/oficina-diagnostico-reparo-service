@@ -147,7 +147,12 @@ aws dynamodb get-item --table-name $t --region us-west-2 --key '{\"numeroOs\":{\
 aws dynamodb query --table-name $t --region us-west-2 --index-name etapa-entradaFilaEm-index --key-condition-expression 'etapa = :e' --expression-attribute-values '{\":e\":{\"S\":\"NA_FILA_DIAGNOSTICO\"}}' --query 'Items[].numeroOs.S'
 ```
 
-No console da AWS: **DynamoDB → Tables → `oficina-<env>-execucoes` → Explore table items**.
+No console da AWS, selecione antes a região **Estados Unidos (Oregon) us-west-2** (canto superior direito); em outra região a tabela não aparece. Depois:
+1. **DynamoDB** → **Explorar itens** → `oficina-<env>-execucoes`.
+2. Para uma OS: **Varrer** → **Filtros** → atributo `numeroOs`, valor = número da OS → **Executar**. O item mostra `etapa`, `diagnostico`, `correlationId` e `mensagensProcessadas`.
+3. Em SQL: **Editor PartiQL** → `SELECT numeroOs, etapa, atualizadoEm FROM "oficina-homolog-execucoes"` → **Executar**.
+
+O `correlationId` é o mesmo em todas as mensagens da OS (`hml-<número>` nos testes manuais, `postman-saga-<runId>` no E2E). A fila de comandos `oficina-<env>-diagnostico-reparo-comandos` fica em `0` com o serviço no ar, porque cada comando é consumido em segundos. O namespace do serviço é `oficina-diagnostico-reparo-<env>`.
 
 ## 8. Executar
 
