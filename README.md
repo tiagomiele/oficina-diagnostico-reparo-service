@@ -43,7 +43,19 @@ Se o cliente rejeitar o orçamento pedindo para **refazer**, a OS volta para a f
 
 ## 3. Stack técnica
 
-Java 21 · Spring Boot 3.3 (Web, Validation, Security, Actuator) · AWS SDK v2 (DynamoDB e SQS) · springdoc-openapi 2.6 (Swagger) · JUnit 5, Testcontainers (LocalStack), ArchUnit, JaCoCo · Spotless · Docker · Kubernetes (EKS) · GitHub Actions + GHCR · SonarCloud · New Relic Java agent.
+- **Linguagem:** Java 21
+- **Framework:** Spring Boot 3.3 (Web, Validation, Security, Actuator)
+- **Banco de dados:** Amazon DynamoDB (AWS SDK v2)
+- **Mensageria:** Amazon SQS (AWS SDK v2)
+- **Documentação da API:** springdoc-openapi 2.6 (Swagger)
+- **Testes:** JUnit 5, Testcontainers (LocalStack), ArchUnit
+- **Cobertura:** JaCoCo
+- **Formatação:** Spotless
+- **Contêiner:** Docker
+- **Orquestração:** Kubernetes (Amazon EKS)
+- **CI/CD:** GitHub Actions, com imagens no GHCR
+- **Qualidade:** SonarCloud
+- **Observabilidade:** New Relic Java agent
 
 ## 4. Arquitetura
 
@@ -121,6 +133,8 @@ Start-Process "http://$lb/swagger-ui.html"
 Em **Authorize**, cole o token do funcionário. O contrato bruto fica em `/v3/api-docs`.
 
 ## 7. Banco de dados (DynamoDB)
+
+Definição completa da tabela, dos atributos e dos índices: [docs/modelo-dados-dynamodb.md](docs/modelo-dados-dynamodb.md). Por que DynamoDB: [ADR 0001](docs/adr/0001-uso-dynamodb.md).
 
 **Objetivo:** guardar o andamento do trabalho do técnico, com um item por OS. O banco é isolado: nenhum outro serviço o acessa. Recurso: tabela `oficina-<env>-execucoes`, criada pelo [`oficina-database-infra/diagnostico-reparo`](https://github.com/tiagomiele/oficina-database-infra/tree/homolog/diagnostico-reparo).
 
